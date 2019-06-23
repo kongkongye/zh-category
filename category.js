@@ -1,11 +1,10 @@
 // ==UserScript==
 // @name         My知乎目录
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/kongkongye/zh-category
 // @version      1.0.0
 // @description  知乎长文目录，方便阅读。
 // @author       空空叶
-// @match        https://www.zhihu.com
-// @grant        none
+// @match        https://www.zhihu.com/*
 // @license      Apache
 // @require http://cdn.staticfile.org/jquery/3.4.1/jquery.min.js
 // ==/UserScript==
