@@ -80,54 +80,104 @@
     };
 
     /**
+     * 不同页面适配器
+     */
+    let Wrappers = {
+        /**
+         * 得到打开的问题列表
+         */
+        getArticleRoots: () => {
+            let result
+
+            let path = window.location.pathname
+            if (path === '/') {//首页
+                result = $('.TopstoryItem').filter((index, ele) => {
+                    let RichContent = $('.RichContent', ele)
+                    return RichContent && RichContent.length > 0 && !RichContent.hasClass('is-collapsed')
+                })
+            }else if (path === '/search') {//搜索页
+                result = $('.SearchResult-Card').filter((index, ele) => {
+                    let RichContent = $('.RichContent', ele)
+                    return RichContent && RichContent.length > 0 && !RichContent.hasClass('is-collapsed')
+                })
+            }else {
+                console.debug('[此页面无法解析]')
+            }
+
+            return result
+        },
+        /**
+         * 尝试解析文章数据
+         * @param $root 文章根元素
+         * @return Article,解析不出返回null
+         */
+        parseArticle: $root => {
+            let id = Utils.guid()
+            let title //文章标题
+
+            //解析
+            let path = window.location.pathname
+            if (path === '/') {//首页
+                let $ContentItem = $('.ContentItem', $root)
+                let data = JSON.parse($ContentItem.attr('data-zop'))
+                title = data.title
+            }else if (path === '/search') {//搜索页
+                let $ContentItemTitle = $('.ContentItem-title', $root)
+                let $nameMeta = $('meta[itemprop="name"]', $ContentItemTitle)
+                title = $nameMeta.attr('content')
+            }else {
+                console.debug('[此页面无法解析]')
+                return null
+            }
+
+            return new Article({
+                id,
+                title,
+                $root,
+            })
+        },
+        /**
+         * 获取侧边栏
+         */
+        getSideBar: () => {
+            let path = window.location.pathname
+            if (path === '/') {//首页
+                return $('.GlobalSideBar')
+            }else if (path === '/search') {//搜索页
+                return $('.SearchSideBar')
+            }else {
+                console.debug('[此页面无法解析]')
+            }
+        }
+
+    }
+
+    /**
      * 文章类
      */
-    let Article = function({id, $root}) {
+    let Article = function({id, title, $root}) {
         this.id = id
+        this.title = title
         this.$root = $root
-        this.data = {}
-        /**
-         * 类型：
-         * Question问题（忽略）
-         * Post
-         * Answer
-         */
-        // this.type
+
         this.titles = []
         this.titlesMap = {}
 
-        $root.css('border-radius', '5px')
-        $root.css('border', 'dashed 1px transparent')
-        $root.css('margin', '-1px')
-
         $root.hover(() => toggleCurrentArticle(this), () => {})
 
-        //文章数据
-        let $ContentItem = $('.ContentItem', $root)
-        let data = $ContentItem.attr('data-zop')
-        this.data = JSON.parse(data)
-
-
-        // let $Feed = $('.Feed', $root)
-        // let data = $Feed.attr('data-za-extra-module')
-        // data = JSON.parse(data)
-        // this.type = data.card.content.type
-
-        // if (this.type === 'Post' || this.type === 'Answer') {
-            let $RichText = $('.RichText', $root)
-            $('h1,h2,h3,h4,h5,h6', $RichText).each((index, $title) => {
-                $title = $($title)
-                let id = Utils.guid()
-                let title = {
-                    id: id,
-                    ele: $title,
-                    content: $title.text()
-                }
-                this.titles.push(title)
-                this.titlesMap[id] = title
-            })
-            console.debug(this.titles)
-        // }
+        let $RichText = $('.RichText', $root)
+        $('h1,h2,h3,h4,h5,h6', $RichText).each((index, $title) => {
+            $title = $($title)
+            let id = Utils.guid()
+            let titleEle = {
+                id: id,
+                ele: $title,
+                content: $title.text()
+            }
+            this.titles.push(titleEle)
+            this.titlesMap[id] = titleEle
+        })
+        console.debug(this.titles)
     }
 
     /**
@@ -156,7 +206,7 @@
         //有标题
         let titleBarContent = $('<div style="padding: 5px 10px;display: flex;flex-direction: column;"></div>')
         //标题
-        let titleLine = $('<div style="align-self: center;text-align: center;">'+currentArticle.data.title+'</div>')
+        let titleLine = $('<div style="align-self: center;text-align: center;">'+currentArticle.title+'</div>')
         titleLine.css('color', Consts.textColorSel)
         titleBarContent.append(titleLine)
         //到顶部
@@ -197,19 +247,18 @@
     let refresh = () => {
         console.debug('[刷新]')
         //得到打开的问题列表
-        let $TopstoryItems = $('.TopstoryItem').filter((index, ele) => {
-            let RichContent = $('.RichContent', ele)
-            return RichContent && RichContent.length > 0 && !RichContent.hasClass('is-collapsed')
-        })
+        let openedArticleRoots = Wrappers.getArticleRoots()
 
         //全部初始化
         let activeIds = {}
-        $TopstoryItems.each((index, ele) => {
-            let id = init($(ele))
-            if (id) {
-                activeIds[id] = true
-            }
-        })
+        if (openedArticleRoots) {
+            openedArticleRoots.each((index, ele) => {
+                let id = init($(ele))
+                if (id) {
+                    activeIds[id] = true
+                }
+            })
+        }
         articles.removeIf(e => {
             if (!activeIds[e.id]) {
                 //注销事件
@@ -229,11 +278,11 @@
 
     /**
      * 初始化
-     * @param $TopstoryItem 打开的项
+     * @param $root 打开的项
      * @return id
      */
-    let init = $TopstoryItem => {
-        let id = $TopstoryItem.attr('id')
+    let init = $root => {
+        let id = $root.attr('id')
         //已经有id了
         if (id) {
             if (articlesMap[id]) {//缓存有效
@@ -244,23 +293,17 @@
             }
         }
 
-        //生成id
-        id = Utils.guid()
-        //设置
-        $TopstoryItem.attr('id', id)
-        try { //生成文章
-            let article = new Article({
-                id,
-                $root: $TopstoryItem
-            })
+        let article = Wrappers.parseArticle($root)
+        if (article) {
+            let id = article.id
+            //设置id
+            $root.attr('id', id)
             //添加缓存
             articles.push(article)
             articlesMap[id] = article
             //日志
-            console.info('[初始化]', id, article, $TopstoryItem)
+            console.info('[初始化]', id, article, $root)
             return id
-        } catch (e) {
-            console.debug('[初始化失败]', $TopstoryItem)
         }
     }
 
@@ -296,18 +339,20 @@
         appHeaderHeight = $('.AppHeader').height()
 
         //初始化标题条
-        let GlobalSideBar = $('.GlobalSideBar')
-        let topBottomMargin = appHeaderHeight+30;
-        titleBar = $('<div id="tagsTitleBar" style="position: fixed;top: '+topBottomMargin+'px;bottom: '+topBottomMargin+'px;background-color: rgba(255, 255, 255, 0.95);z-index: 180;opacity: 0.5;border-radius: 5px;overflow-y: auto;box-shadow: rgba(152, 152, 152, 0.5) 0px 1px 3px;word-break: break-word;"></div>')
-        titleBar.css('color', Consts.textColorUnSel)
-        titleBar.width(GlobalSideBar.width())
-        titleBar.hover(() => {
-            titleBar.css('opacity', '1')
-        }, () => {
-            titleBar.css('opacity', '0.5')
+        let $SideBar = Wrappers.getSideBar()
+        if ($SideBar) {
+            let topBottomMargin = appHeaderHeight+30;
+            titleBar = $('<div id="tagsTitleBar" style="position: fixed;top: '+topBottomMargin+'px;bottom: '+topBottomMargin+'px;background-color: rgba(255, 255, 255, 0.95);z-index: 180;opacity: 0.5;border-radius: 5px;overflow-y: auto;box-shadow: rgba(152, 152, 152, 0.5) 0px 1px 3px;word-break: break-word;"></div>')
+            titleBar.css('color', Consts.textColorUnSel)
+            titleBar.width($SideBar.width())
+            titleBar.hover(() => {
+                titleBar.css('opacity', '1')
+            }, () => {
+                titleBar.css('opacity', '0.5')
 
-        })
-        titleBar.hide()
-        GlobalSideBar.append(titleBar)
+            })
+            titleBar.hide()
+            $SideBar.append(titleBar)
+        }
     })
 })();
