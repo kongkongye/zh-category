@@ -6,6 +6,7 @@
 // @author       空空叶
 // @match        https://www.zhihu.com
 // @grant        none
+// @license      Apache
 // @require http://cdn.staticfile.org/jquery/3.4.1/jquery.min.js
 // ==/UserScript==
 
