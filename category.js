@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         My知乎目录
 // @namespace    https://github.com/kongkongye/zh-category
-// @version      1.0.1
+// @version      1.1.0
 // @description  知乎长文目录，方便阅读。
 // @author       空空叶
 // @match        https://www.zhihu.com/*
@@ -90,18 +90,41 @@
             let result
 
             let path = window.location.pathname
-            if (path === '/') {//首页
-                result = $('.TopstoryItem').filter((index, ele) => {
-                    let RichContent = $('.RichContent', ele)
-                    return RichContent && RichContent.length > 0 && !RichContent.hasClass('is-collapsed')
-                })
+            if (path === '/' || path === '/follow') {//首页&关注
+                result = $('.TopstoryItem')
             }else if (path === '/search') {//搜索页
-                result = $('.SearchResult-Card').filter((index, ele) => {
+                result = $('.SearchResult-Card')
+            }else if (path.startsWith("/question")) {
+                if (path.indexOf("answer") !== -1) {//问题的指定回答
+                    //指定回答&更多回答
+                    result = $('.AnswerCard,.List-item')
+                }else {//问题的所有回答
+                    result = $('.List-item')
+                }
+            }else if (path === '/topic' || path === '/explore') {//话题
+                result = $('.feed-item').filter((index, ele) => {
+                    let RichText = $('.zm-item-rich-text', ele)
+                    if (RichText && RichText.length > 0) {
+                        let children = RichText.children()
+                        if (children
+                            && children.length > 0
+                            && children[0].nodeName.toLowerCase() === 'div'
+                            && $(children[0]).css('display') !== 'none') {
+                            return true
+                        }
+                    }
+                    return false
+                })
+                return result
+            }else {
+                console.debug('[此页面无法解析]', path)
+            }
+
+            if (result) {
+                result = result.filter((index, ele) => {
                     let RichContent = $('.RichContent', ele)
                     return RichContent && RichContent.length > 0 && !RichContent.hasClass('is-collapsed')
                 })
-            }else {
-                console.debug('[此页面无法解析]')
             }
 
             return result
@@ -117,7 +140,7 @@
 
             //解析
             let path = window.location.pathname
-            if (path === '/') {//首页
+            if (path === '/' || path === '/follow') {//首页&关注
                 let $ContentItem = $('.ContentItem', $root)
                 let data = JSON.parse($ContentItem.attr('data-zop'))
                 title = data.title
@@ -125,8 +148,13 @@
                 let $ContentItemTitle = $('.ContentItem-title', $root)
                 let $nameMeta = $('meta[itemprop="name"]', $ContentItemTitle)
                 title = $nameMeta.attr('content')
+            }else if (path.startsWith("/question")) {
+                //不需要显示标题
+            }else if (path === '/topic' || path === '/explore') {//话题&发现（旧）
+                let $questionLink = $('.question_link', $root)
+                title = $questionLink.text()
             }else {
-                console.debug('[此页面无法解析]')
+                console.debug('[此页面无法解析]', path)
                 return null
             }
 
@@ -137,19 +165,44 @@
             })
         },
         /**
+         * 获取头部条
+         */
+        getHeader: () => {
+            let path = window.location.pathname
+            if (path === '/topic' || path === '/explore') {//话题&发现（旧）
+                return $('.zu-top')
+            }else {//其他(新)
+                return $('.AppHeader')
+            }
+        },
+        /**
          * 获取侧边栏
          */
         getSideBar: () => {
             let path = window.location.pathname
-            if (path === '/') {//首页
+            if (path === '/' || path === '/follow') {//首页&关注
                 return $('.GlobalSideBar')
             }else if (path === '/search') {//搜索页
                 return $('.SearchSideBar')
+            }else if (path.startsWith("/question")) {
+                return $('.Question-sideColumn')
+            }else if (path === '/topic' || path === '/explore') {//话题&发现（旧）
+                return $('.zu-main-sidebar')
             }else {
-                console.debug('[此页面无法解析]')
+                console.debug('[此页面无法解析]', path)
+            }
+        },
+        /**
+         * 获取文本容器
+         */
+        getTextWrapper: $root => {
+            let path = window.location.pathname
+            if (path === '/topic' || path === '/explore') {//话题&发现（旧）
+                return $('.zm-item-rich-text', $root)
+            }else {//其他(新)
+                return $('.RichText', $root)
             }
         }
-
     }
 
     /**
@@ -157,16 +210,16 @@
      */
     let Article = function({id, title, $root}) {
         this.id = id
-        this.title = title
+        this.title = title //可以为null
         this.$root = $root
 
         this.titles = []
         this.titlesMap = {}
 
-        $root.hover(() => toggleCurrentArticle(this), () => {})
+        $root.on('mousemove', () => toggleCurrentArticle(this))
 
-        let $RichText = $('.RichText', $root)
-        $('h1,h2,h3,h4,h5,h6', $RichText).each((index, $title) => {
+        let $TextWrapper = Wrappers.getTextWrapper($root)
+        $('h1,h2,h3,h4,h5,h6', $TextWrapper).each((index, $title) => {
             $title = $($title)
             let id = Utils.guid()
             let titleEle = {
@@ -206,18 +259,20 @@
         //有标题
         let titleBarContent = $('<div style="padding: 5px 10px;display: flex;flex-direction: column;"></div>')
         //标题
-        let titleLine = $('<div style="align-self: center;text-align: center;">'+currentArticle.title+'</div>')
-        titleLine.css('color', Consts.textColorSel)
-        titleBarContent.append(titleLine)
+        if (currentArticle.title) {
+            let titleLine = $('<div style="align-self: center;text-align: center;">'+currentArticle.title+'</div>')
+            titleLine.css('color', Consts.textColorSel)
+            titleBarContent.append(titleLine)
+        }
         //到顶部
-        let toTop = $('<a href="javascript: void(0)" style="align-self: center;margin-top: 5px;">↑到顶部↑</a>')
+        let toTop = $('<a href="javascript: void(0)" style="align-self: center;margin-top: 5px;color: '+Consts.textColorUnSel+';">↑到顶部↑</a>')
         toTop.on('click', () => Utils.goToByScroll(currentArticle.$root))
         toTop.hover(() => toTop.css('color', Consts.textColorSel), () => toTop.css('color', Consts.textColorUnSel))
         titleBarContent.append(toTop)
         //中间标题
         currentArticle.titles.forEach(item => {
             let titleEle = $('<a href="javascript: void(0)" ' +
-                'style="border-radius: 5px;border: solid 1px lightgrey;padding: 5px 10px;margin-top: 5px;"' +
+                'style="border-radius: 5px;border: solid 1px lightgrey;padding: 5px 10px;margin-top: 5px;color: '+Consts.textColorUnSel+';"' +
                 '>'+item.content+'</a>')
             titleEle.hover(() => {
                 titleEle.css('border-style', 'inset')
@@ -230,7 +285,7 @@
             titleBarContent.append(titleEle)
         })
         //到底部
-        let toBottom = $('<a href="javascript: void(0)" style="align-self: center;margin-top: 5px;margin-bottom: 5px;">↓到底部↓</a>')
+        let toBottom = $('<a href="javascript: void(0)" style="align-self: center;margin-top: 5px;margin-bottom: 5px;color: '+Consts.textColorUnSel+';">↓到底部↓</a>')
         toBottom.on('click', () => Utils.goToEndByScroll(currentArticle.$root))
         toBottom.hover(() => toBottom.css('color', Consts.textColorSel), () => toBottom.css('color', Consts.textColorUnSel))
         titleBarContent.append(toBottom)
@@ -336,7 +391,7 @@
     //ready时运行
     $(() => {
         //计算头部高度
-        appHeaderHeight = $('.AppHeader').height()
+        appHeaderHeight = Wrappers.getHeader().height()
 
         //初始化标题条
         let $SideBar = Wrappers.getSideBar()
@@ -354,5 +409,10 @@
             titleBar.hide()
             $SideBar.append(titleBar)
         }
+
+        //初始刷新
+        refresh()
+        //定时刷新
+        setInterval(refresh, 3000)
     })
 })();
