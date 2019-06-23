@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         My知乎目录
 // @namespace    https://github.com/kongkongye/zh-category
-// @version      1.0.0
+// @version      1.0.1
 // @description  知乎长文目录，方便阅读。
 // @author       空空叶
 // @match        https://www.zhihu.com/*
